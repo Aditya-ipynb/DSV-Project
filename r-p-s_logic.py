@@ -2,41 +2,45 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+# Set page config
 st.set_page_config(
-    page_title="Pokémon Type Balancing Engine", page_icon="⚡", layout="wide"
+    page_title="Pokémon Type Engine", page_icon="⚡", layout="wide"
 )
 
 # ---------------------------------------------------------
-# 1. THE ROCK-PAPER-SCISSORS DATA MATRIX (18 TYPES)
-# Matrix format: TYPE_CHART[Attacker][Defender] = Multiplier
+# 1. CONSTANTS, COLOR PALETTE & TYPE ICONS (CDN)
 # ---------------------------------------------------------
-TYPES = [
-    "Normal",
-    "Fire",
-    "Water",
-    "Grass",
-    "Electric",
-    "Ice",
-    "Fighting",
-    "Poison",
-    "Ground",
-    "Flying",
-    "Psychic",
-    "Bug",
-    "Rock",
-    "Ghost",
-    "Dragon",
-    "Dark",
-    "Steel",
-    "Fairy",
-]
+TYPE_COLORS = {
+    "Normal": "#A8A77A",
+    "Fire": "#EE8130",
+    "Water": "#6390F0",
+    "Electric": "#F7D02C",
+    "Grass": "#7AC74C",
+    "Ice": "#96D9D6",
+    "Fighting": "#C22E28",
+    "Poison": "#A33EA1",
+    "Ground": "#E2BF65",
+    "Flying": "#A98FF3",
+    "Psychic": "#F95587",
+    "Bug": "#A6B91A",
+    "Rock": "#B6A136",
+    "Ghost": "#735797",
+    "Dragon": "#6F35FC",
+    "Dark": "#705746",
+    "Steel": "#B7B7CE",
+    "Fairy": "#D685AD",
+}
+
+TYPES = list(TYPE_COLORS.keys())
+
+# Vector Type Icon URLs (Raw GitHub CDN)
+TYPE_ICONS = {
+    t: f"https://raw.githubusercontent.com/duiker101/pokemon-type-svg/master/icons/{t.lower()}.svg"
+    for t in TYPES
+}
 
 TYPE_CHART = {
-    "Normal": {
-        "Rock": 0.5,
-        "Ghost": 0,
-        "Steel": 0.5,
-    },
+    "Normal": {"Rock": 0.5, "Ghost": 0, "Steel": 0.5},
     "Fire": {
         "Fire": 0.5,
         "Water": 0.5,
@@ -153,17 +157,8 @@ TYPE_CHART = {
         "Bug": 2,
         "Steel": 0.5,
     },
-    "Ghost": {
-        "Normal": 0,
-        "Psychic": 2,
-        "Ghost": 2,
-        "Dark": 0.5,
-    },
-    "Dragon": {
-        "Dragon": 2,
-        "Steel": 0.5,
-        "Fairy": 0,
-    },
+    "Ghost": {"Normal": 0, "Psychic": 2, "Ghost": 2, "Dark": 0.5},
+    "Dragon": {"Dragon": 2, "Steel": 0.5, "Fairy": 0},
     "Dark": {
         "Fighting": 0.5,
         "Psychic": 2,
@@ -192,143 +187,192 @@ TYPE_CHART = {
 
 
 # ---------------------------------------------------------
-# 2. CORE LOGIC ENGINE
+# 2. HELPER CALCULATORS & HTML RENDERERS
 # ---------------------------------------------------------
-def get_attack_multiplier(atk_type: str, def_type: str) -> float:
-    """Returns damage multiplier when atk_type attacks def_type."""
-    return TYPE_CHART.get(atk_type, {}).get(def_type, 1.0)
+def get_attack_multiplier(atk: str, df: str) -> float:
+    return TYPE_CHART.get(atk, {}).get(df, 1.0)
 
 
-def get_defensive_profile(def_type_1: str, def_type_2: str = "None") -> dict:
-    """Calculates defensive weaknesses/resistances against all 18 attacking types."""
+def get_defensive_profile(type1: str, type2: str = "None") -> dict:
     profile = {}
     for atk in TYPES:
-        mult1 = get_attack_multiplier(atk, def_type_1)
-        mult2 = (
-            get_attack_multiplier(atk, def_type_2)
-            if def_type_2 != "None"
-            else 1.0
-        )
-        profile[atk] = mult1 * mult2
+        m1 = get_attack_multiplier(atk, type1)
+        m2 = get_attack_multiplier(atk, type2) if type2 != "None" else 1.0
+        profile[atk] = m1 * m2
     return profile
 
 
-def build_full_matrix_df() -> pd.DataFrame:
-    """Generates an 18x18 pandas DataFrame for visualization."""
-    matrix = []
-    for atk in TYPES:
-        row = []
-        for df in TYPES:
-            row.append(get_attack_multiplier(atk, df))
-        matrix.append(row)
-    return pd.DataFrame(matrix, index=TYPES, columns=TYPES)
+def render_type_badge(type_name: str) -> str:
+    """Creates a sleek HTML badge with icon and matching type color."""
+    bg = TYPE_COLORS.get(type_name, "#777")
+    icon = TYPE_ICONS.get(type_name, "")
+    return f"""
+    <div style="
+        display: inline-flex;
+        align-items: center;
+        background-color: {bg};
+        color: white;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 14px;
+        margin: 4px 6px 4px 0px;
+        box-shadow: 0px 2px 4px rgba(0,0,0,0.2);
+    ">
+        <img src="{icon}" style="width: 18px; height: 18px; margin-right: 8px; filter: drop-shadow(0px 1px 1px rgba(0,0,0,0.5));"/>
+        {type_name.upper()}
+    </div>
+    """
+
+
+def render_row_card(
+    title: str,
+    types_list: list,
+    border_color: str,
+    bg_color: str,
+    multiplier_label: str,
+):
+    """Renders a full-width visual card ONLY if types exist for this category."""
+    if not types_list:
+        return  # UX Trick: Hide completely if empty!
+
+    badges_html = "".join([render_type_badge(t) for t in types_list])
+
+    card_html = f"""
+    <div style="
+        background-color: {bg_color};
+        border-left: 6px solid {border_color};
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+        box-shadow: 0px 1px 3px rgba(0,0,0,0.08);
+    ">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="font-size: 16px; font-weight: 700; color: #333;">{title}</span>
+            <span style="
+                background-color: {border_color};
+                color: white;
+                font-size: 12px;
+                font-weight: 800;
+                padding: 2px 10px;
+                border-radius: 12px;
+            ">{multiplier_label}</span>
+        </div>
+        <div>{badges_html}</div>
+    </div>
+    """
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------
-# 3. STREAMLIT FRONTEND INTERFACE
+# 3. STREAMLIT INTERFACE
 # ---------------------------------------------------------
 st.title("⚡ Pokémon Type Balancing Engine")
-st.caption(
-    "Demonstrating the fundamental 'Rock-Paper-Scissors' multi-type equilibrium."
-)
+st.caption("Visualizing Type Synergies, Vulnerabilities, and Equilibrium")
 
 tab1, tab2 = st.tabs(
-    ["🔍 Single / Dual-Type Analyzer", "📊 Complete 18x18 Interactive Matrix"]
+    ["🛡️ Type Defensive Profile", "📊 Interactive 18x18 Matrix"]
 )
 
 # ---------------------------------------------------------
-# TAB 1: INDIVIDUAL TYPE DEFENSIVE ANALYZER
+# TAB 1: VISUAL ROW CARDS
 # ---------------------------------------------------------
 with tab1:
-    st.subheader("Evaluate Type Defensive Profiles")
     col1, col2 = st.columns(2)
-
     with col1:
         type1 = st.selectbox(
-            "Select Primary Type:", TYPES, index=TYPES.index("Fire")
+            "Primary Type:", TYPES, index=TYPES.index("Grass")
         )
     with col2:
         type2_options = ["None"] + [t for t in TYPES if t != type1]
-        type2 = st.selectbox("Select Secondary Type (Optional):", type2_options)
+        type2 = st.selectbox(
+            "Secondary Type (Optional):",
+            type2_options,
+            index=type2_options.index("Steel") if "Steel" in type2_options else 0,
+        )
 
-    # Calculate profile
     profile = get_defensive_profile(type1, type2)
 
-    # Group into categories
-    quad_weak = [t for t, m in profile.items() if m == 4.0]
+    # Filter categories
+    q_weak = [t for t, m in profile.items() if m == 4.0]
     weak = [t for t, m in profile.items() if m == 2.0]
-    neutral = [t for t, m in profile.items() if m == 1.0]
     resist = [t for t, m in profile.items() if m == 0.5]
-    quad_resist = [t for t, m in profile.items() if m == 0.25]
+    q_resist = [t for t, m in profile.items() if m == 0.25]
     immune = [t for t, m in profile.items() if m == 0.0]
 
     st.markdown("---")
-    st.write(
-        f"### Defensive Breakdown for **{type1}{'/' + type2 if type2 != 'None' else ''}**"
-    )
 
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("4x Weaknesses", len(quad_weak))
-    m2.metric("2x Weaknesses", len(weak))
-    m3.metric("Neutral (1x)", len(neutral))
-    m4.metric("Resistances (0.5x)", len(resist))
-    m5.metric("4x Resistances", len(quad_resist))
-    m6.metric("Immunities (0x)", len(immune))
+    # Header display using type badges
+    header_html = f"<div style='margin-bottom: 20px;'><h3 style='display:inline; margin-right: 15px;'>Defensive Profile for:</h3> {render_type_badge(type1)} {render_type_badge(type2) if type2 != 'None' else ''}</div>"
+    st.markdown(header_html, unsafe_allow_html=True)
 
-    # Detailed list columns
-    res_col1, res_col2, res_col3 = st.columns(3)
+    # Render Visual Row Cards (Only shows rows that have items)
+    render_row_card("Critical Vulnerabilities", q_weak, "#D32F2F", "#FFEBEE", "4x DAMAGE")
+    render_row_card("Weaknesses", weak, "#E53935", "#FFEBEE", "2x DAMAGE")
+    render_row_card("Total Immunities", immune, "#1976D2", "#E3F2FD", "0x DAMAGE")
+    render_row_card("Double Resistances", q_resist, "#388E3C", "#E8F5E9", "0.25x DAMAGE")
+    render_row_card("Resistances", resist, "#4CAF50", "#E8F5E9", "0.5x DAMAGE")
 
-    with res_col1:
-        st.error("🚨 Weaknesses")
-        if quad_weak:
-            st.write(f"**4x Ultra Weak:** {', '.join(quad_weak)}")
-        if weak:
-            st.write(f"**2x Weak:** {', '.join(weak)}")
-        if not quad_weak and not weak:
-            st.write("None! Clean defense.")
-
-    with res_col2:
-        st.success("🛡️ Resistances & Immunities")
-        if immune:
-            st.write(f"**0x Immune:** {', '.join(immune)}")
-        if quad_resist:
-            st.write(f"**0.25x Ultra Resist:** {', '.join(quad_resist)}")
-        if resist:
-            st.write(f"**0.5x Resist:** {', '.join(resist)}")
-        if not immune and not quad_resist and not resist:
-            st.write("No resistances.")
-
-    with res_col3:
-        st.info("⚖️ Neutral Damage (1.0x)")
-        st.write(", ".join(neutral))
-
+    # Show neutral compactly at the bottom
+    neutral = [t for t, m in profile.items() if m == 1.0]
+    with st.expander("Show Neutral Damage Types (1.0x)"):
+        st.markdown(
+            "".join([render_type_badge(t) for t in neutral]),
+            unsafe_allow_html=True,
+        )
 
 # ---------------------------------------------------------
-# TAB 2: FULL TYPE MATRIX HEATMAP
+# TAB 2: POLISHED HEATMAP
 # ---------------------------------------------------------
 with tab2:
-    st.subheader("Full 18x18 Attacking vs. Defending Matrix")
     st.write(
-        "Read **Rows** as Attacker Types, and **Columns** as Defender Types."
+        "Read **Rows** as Attacking Types, and **Columns** as Defending Types."
     )
 
-    df_matrix = build_full_matrix_df()
+    # Build matrix dataframe
+    matrix_data = []
+    text_data = []
+    for atk in TYPES:
+        m_row = []
+        t_row = []
+        for df in TYPES:
+            val = get_attack_multiplier(atk, df)
+            m_row.append(val)
+            # Format display text for clarity
+            if val == 2.0:
+                t_row.append("2x")
+            elif val == 0.5:
+                t_row.append("½x")
+            elif val == 0.0:
+                t_row.append("0x")
+            else:
+                t_row.append("")
+        matrix_data.append(m_row)
+        text_data.append(t_row)
 
-    # Create Plotly Heatmap
+    df_matrix = pd.DataFrame(matrix_data, index=TYPES, columns=TYPES)
+
     fig = px.imshow(
         df_matrix,
         labels=dict(x="Defender Type", y="Attacker Type", color="Multiplier"),
         x=TYPES,
         y=TYPES,
         color_continuous_scale=[
-            [0.0, "#1f77b4"],  # 0x (Immune - Blue)
-            [0.25, "#2ca02c"],  # 0.5x (Resisted - Green)
-            [0.5, "#cccccc"],  # 1.0x (Neutral - Light Gray)
-            [1.0, "#d62728"],  # 2.0x (Super Effective - Red)
+            [0.0, "#1E88E5"],  # Immune (Blue)
+            [0.25, "#4CAF50"],  # Resisted (Green)
+            [0.5, "#F5F5F5"],  # Neutral (Soft Gray)
+            [1.0, "#E53935"],  # Weakness (Red)
         ],
+        text_auto=False,
         aspect="auto",
-        text_auto=True,
     )
 
-    fig.update_layout(height=650)
+    # Overlay formatted textlabels
+    fig.update_traces(
+        text=text_data,
+        texttemplate="%{text}",
+        textfont={"size": 12, "weight": "bold"},
+    )
+    fig.update_layout(height=650, margin=dict(l=20, r=20, t=20, b=20))
+
     st.plotly_chart(fig, use_container_width=True)

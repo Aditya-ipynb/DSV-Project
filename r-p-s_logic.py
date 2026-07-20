@@ -8,7 +8,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 1. CONSTANTS, COLOR PALETTE & TYPE ICONS (CDN)
+# 1. CONSTANTS, COLOR PALETTE & TYPE ICONS
 # ---------------------------------------------------------
 TYPE_COLORS = {
     "Normal": "#A8A77A",
@@ -33,9 +33,9 @@ TYPE_COLORS = {
 
 TYPES = list(TYPE_COLORS.keys())
 
-# Vector Type Icon URLs (Raw GitHub CDN)
+# Reliable SVG CDN for Pokémon Type Icons
 TYPE_ICONS = {
-    t: f"https://raw.githubusercontent.com/duiker101/pokemon-type-svg/master/icons/{t.lower()}.svg"
+    t: f"https://raw.githubusercontent.com/duiker101/pokemon-type-svg-icons/master/icons/{t.lower()}.svg"
     for t in TYPES
 }
 
@@ -203,26 +203,25 @@ def get_defensive_profile(type1: str, type2: str = "None") -> dict:
 
 
 def render_type_badge(type_name: str) -> str:
-    """Creates a sleek HTML badge with icon and matching type color."""
+    """Creates a clean HTML badge with working SVG icons."""
     bg = TYPE_COLORS.get(type_name, "#777")
-    icon = TYPE_ICONS.get(type_name, "")
-    return f"""
-    <div style="
-        display: inline-flex;
-        align-items: center;
-        background-color: {bg};
-        color: white;
-        padding: 6px 14px;
-        border-radius: 20px;
-        font-weight: bold;
-        font-size: 14px;
-        margin: 4px 6px 4px 0px;
-        box-shadow: 0px 2px 4px rgba(0,0,0,0.2);
-    ">
-        <img src="{icon}" style="width: 18px; height: 18px; margin-right: 8px; filter: drop-shadow(0px 1px 1px rgba(0,0,0,0.5));"/>
-        {type_name.upper()}
-    </div>
-    """
+    icon_url = TYPE_ICONS.get(type_name, "")
+    return (
+        f'<div style="'
+        f"display: inline-flex; "
+        f"align-items: center; "
+        f"background-color: {bg}; "
+        f"color: white; "
+        f"padding: 5px 12px; "
+        f"border-radius: 16px; "
+        f"font-weight: bold; "
+        f"font-size: 13px; "
+        f"margin: 3px; "
+        f'box-shadow: 0px 2px 4px rgba(0,0,0,0.25);">'
+        f'<img src="{icon_url}" style="width: 16px; height: 16px; margin-right: 6px; filter: drop-shadow(0px 1px 1px rgba(0,0,0,0.5));" />'
+        f"{type_name.upper()}"
+        f"</div>"
+    )
 
 
 def render_row_card(
@@ -232,35 +231,33 @@ def render_row_card(
     bg_color: str,
     multiplier_label: str,
 ):
-    """Renders a full-width visual card ONLY if types exist for this category."""
+    """Renders a visual card ONLY if types exist for this category."""
     if not types_list:
-        return  # UX Trick: Hide completely if empty!
+        return
 
     badges_html = "".join([render_type_badge(t) for t in types_list])
 
-    card_html = f"""
-    <div style="
-        background-color: {bg_color};
-        border-left: 6px solid {border_color};
-        border-radius: 8px;
-        padding: 16px 20px;
-        margin-bottom: 16px;
-        box-shadow: 0px 1px 3px rgba(0,0,0,0.08);
-    ">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <span style="font-size: 16px; font-weight: 700; color: #333;">{title}</span>
-            <span style="
-                background-color: {border_color};
-                color: white;
-                font-size: 12px;
-                font-weight: 800;
-                padding: 2px 10px;
-                border-radius: 12px;
-            ">{multiplier_label}</span>
-        </div>
-        <div>{badges_html}</div>
-    </div>
-    """
+    card_html = (
+        f'<div style="'
+        f"background-color: {bg_color}; "
+        f"border-left: 6px solid {border_color}; "
+        f"border-radius: 8px; "
+        f"padding: 14px 18px; "
+        f"margin-bottom: 14px; "
+        f'box-shadow: 0px 1px 3px rgba(0,0,0,0.1);">'
+        f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">'
+        f'<span style="font-size: 15px; font-weight: 700; color: #222;">{title}</span>'
+        f'<span style="'
+        f"background-color: {border_color}; "
+        f"color: white; "
+        f"font-size: 11px; "
+        f"font-weight: 800; "
+        f"padding: 2px 8px; "
+        f'border-radius: 10px;">{multiplier_label}</span>'
+        f"</div>"
+        f"<div>{badges_html}</div>"
+        f"</div>"
+    )
     st.markdown(card_html, unsafe_allow_html=True)
 
 
@@ -303,8 +300,13 @@ with tab1:
     st.markdown("---")
 
     # Header display using type badges
-    header_html = f"<div style='margin-bottom: 20px;'><h3 style='display:inline; margin-right: 15px;'>Defensive Profile for:</h3> {render_type_badge(type1)} {render_type_badge(type2) if type2 != 'None' else ''}</div>"
-    st.markdown(header_html, unsafe_allow_html=True)
+    selected_badge = render_type_badge(type1) + (
+        render_type_badge(type2) if type2 != "None" else ""
+    )
+    st.markdown(
+        f'<div style="margin-bottom: 15px;"><h3 style="display:inline; margin-right: 10px;">Defensive Profile for:</h3>{selected_badge}</div>',
+        unsafe_allow_html=True,
+    )
 
     # Render Visual Row Cards (Only shows rows that have items)
     render_row_card("Critical Vulnerabilities", q_weak, "#D32F2F", "#FFEBEE", "4x DAMAGE")
@@ -338,7 +340,6 @@ with tab2:
         for df in TYPES:
             val = get_attack_multiplier(atk, df)
             m_row.append(val)
-            # Format display text for clarity
             if val == 2.0:
                 t_row.append("2x")
             elif val == 0.5:
@@ -367,7 +368,6 @@ with tab2:
         aspect="auto",
     )
 
-    # Overlay formatted textlabels
     fig.update_traces(
         text=text_data,
         texttemplate="%{text}",
@@ -375,4 +375,5 @@ with tab2:
     )
     fig.update_layout(height=650, margin=dict(l=20, r=20, t=20, b=20))
 
-    st.plotly_chart(fig, use_container_width=True)
+    # Updated 'width="stretch"' to resolve deprecation warnings
+    st.plotly_chart(fig, width="stretch")
